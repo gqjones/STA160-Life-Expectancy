@@ -1,0 +1,117 @@
+---
+title: "STA 160 Project"
+author: "Gabriel Jones"
+date: "2024-11-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Libraries**
+```{r echo=F}
+list.of.packages <- c("MASS", "dplyr", "tidyverse", "ggplot2", "leaps", "boot", 
+                      "knitr", "hrbrthemes", "RColorBrewer", "paletteer", 
+                      "glmnet", "corrplot", "ggpairs")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages, library, character.only = TRUE)
+```
+
+
+```{r}
+data <- read.csv("Life Expectancy Data.csv")
+data <- na.omit(data)
+```
+
+```{r}
+count(data,Country)
+```
+
+```{r}
+data%>%
+  ggplot(aes(Year))+
+  geom_bar()
+```
+
+Correlation Matrix
+```{r}
+dataNumeric <- data%>%
+  select(-"Country", -"Year", -"Status")%>%
+  na.omit()
+
+corrplot(cor(dataNumeric), method="color")
+```
+High Correlations include:
+- Life expectancy & Adult Mortality (-0.70)
+- Life expectancy & income (.72)
+- Life expectancy & schooling (.72)
+- GDP & percentage expenditure (.95)
+- Income & schooling (.78)
+- thinness vars (.92)
+- Diphtheria & Polio (0.61)
+- Under five deaths & population (.65)
+- infant deaths & population (0.67)
+- Under five deaths & infant deaths (0.99)
+
+Life Expectancy by Country Boxplot
+```{r}
+data%>%
+  na.omit()%>%
+ # group_by(Country)%>%
+  ggplot(aes(x=Country, y=Life.expectancy))+
+  geom_boxplot()+
+  scale_x_discrete(guide = guide_axis(angle = 70))
+```
+Find Outliers
+
+```{r}
+out.dat <- data[FALSE,]
+
+for (c in unique(data$Country)){
+  country.dat <- data$Life.expectancy[data$Country==c]
+  lowerq = quantile(data$Life.expectancy[data$Country==c])[2]
+  upperq = quantile(data$Life.expectancy[data$Country==c])[4]
+  iqr <- IQR(data$Life.expectancy[data$Country==c])
+  upper.out = (iqr * 1.5) + upperq
+  lower.out = lowerq - (iqr * 1.5)
+  for (v in country.dat){
+    if (v <= lower.out | v >= upper.out){
+      out.dat <- rbind(out.dat, filter(data, Country==c, Life.expectancy==v))
+    }
+  }
+}
+out.dat
+```
+
+QQ plots
+```{r}
+for (i in 1:length(colnames(dataNumeric))){
+  qqnorm(dataNumeric[,i], main = paste0("Normal Q-Q Plot ", colnames(dataNumeric)[i]))
+}
+```
+
+Scatterplots
+```{r}
+for (i in 2:length(colnames(dataNumeric))){
+  plot(dataNumeric[,i], dataNumeric[,1], 
+       main = paste0(colnames(dataNumeric)[i], "Scatterplot"),
+       xlab = colnames(dataNumeric)[i],
+       ylab = colnames(dataNumeric)[1])
+}
+```
+
+Residual Plots
+```{r}
+for (i in 2:length(colnames(dataNumeric))){
+  model <- lm(dataNumeric[,1] ~ dataNumeric[,i])
+  res <- resid(model)
+  plot(fitted(model), res,
+       main = paste0(colnames(dataNumeric)[i], " Residual Plot"),
+       xlab = "Residuals",
+       ylab = "Fitted Values")
+  abline(0,0) 
+}
+```
+
