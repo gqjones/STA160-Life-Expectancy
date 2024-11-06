@@ -10,15 +10,16 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 **Libraries**
-```{r echo=F}
+
+```{r echo=F, results=F}
 list.of.packages <- c("MASS", "dplyr", "tidyverse", "ggplot2", "leaps", "boot", 
                       "knitr", "hrbrthemes", "RColorBrewer", "paletteer", 
-                      "glmnet", "corrplot", "ggpairs")
+                      "glmnet", "corrplot")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, library, character.only = TRUE)
 ```
-
+**Load Data**
 
 ```{r}
 data <- read.csv("Life Expectancy Data.csv")
@@ -26,8 +27,14 @@ data <- na.omit(data)
 ```
 
 ```{r}
+glimpse(data)
+```
+
+```{r}
 count(data,Country)
 ```
+
+**Yearly data points**
 
 ```{r}
 data%>%
@@ -35,7 +42,17 @@ data%>%
   geom_bar()
 ```
 
-Correlation Matrix
+**Overall Life Expectancy by Year**
+
+```{r}
+data%>%
+  mutate(Year=as.factor(Year))%>%
+  ggplot(aes(Year, Life.expectancy))+
+  geom_boxplot()
+```
+
+**Correlation Matrix**
+
 ```{r}
 dataNumeric <- data%>%
   select(-"Country", -"Year", -"Status")%>%
@@ -43,28 +60,58 @@ dataNumeric <- data%>%
 
 corrplot(cor(dataNumeric), method="color")
 ```
-High Correlations include:
-- Life expectancy & Adult Mortality (-0.70)
-- Life expectancy & income (.72)
-- Life expectancy & schooling (.72)
-- GDP & percentage expenditure (.95)
-- Income & schooling (.78)
-- thinness vars (.92)
-- Diphtheria & Polio (0.61)
-- Under five deaths & population (.65)
-- infant deaths & population (0.67)
-- Under five deaths & infant deaths (0.99)
 
-Life Expectancy by Country Boxplot
+High Correlations include:
+
+-   Life expectancy & Adult Mortality (-0.70)
+
+-   Life expectancy & income (.72)
+
+-   Life expectancy & schooling (.72)
+
+-   GDP & percentage expenditure (.95)
+
+-   Income & schooling (.78) - thinness vars (.92)
+
+-   Diphtheria & Polio (0.61)
+
+-   Under five deaths & population (.65)
+
+-   infant deaths & population (0.67)
+
+-   Under five deaths & infant deaths (0.99)
+
+Vars of interest may include: *Adult Mortality*, *HIV AIDS*, *Income*, and *Schooling.*
+
+If the above are used, consider dropping either income or schooling
+
+**Life Expectancy by Country Summary Statistics**
+
 ```{r}
+# Numerical
+sumstat <- data.frame("Country"=c(),
+                      "Min."=c(),
+                      "X1st.Qu."=c(),
+                      "Median"=c(),
+                      "Mean"=c(),
+                      "X3rd.Qu."=c(),
+                      "Max."=c())
+for (c in unique(data$Country)){
+  country.dat <- data$Life.expectancy[data$Country==c]
+  r <- cbind(data.frame("Country"=c(c)), data.frame(as.list(summary(country.dat))))
+  sumstat <- rbind(sumstat, r)
+}
+kable(sumstat)
+
+# Graphical
 data%>%
-  na.omit()%>%
- # group_by(Country)%>%
   ggplot(aes(x=Country, y=Life.expectancy))+
   geom_boxplot()+
-  scale_x_discrete(guide = guide_axis(angle = 70))
+  scale_x_discrete(guide = guide_axis(angle = 70))+
+  theme(axis.text.x=element_text(size=7))
 ```
-Find Outliers
+
+**Find Life Expectancy Outliers**
 
 ```{r}
 out.dat <- data[FALSE,]
@@ -82,17 +129,27 @@ for (c in unique(data$Country)){
     }
   }
 }
-out.dat
+kable(head(out.dat, 10))
 ```
 
-QQ plots
+**QQ plots**
+
 ```{r}
 for (i in 1:length(colnames(dataNumeric))){
   qqnorm(dataNumeric[,i], main = paste0("Normal Q-Q Plot ", colnames(dataNumeric)[i]))
 }
 ```
 
-Scatterplots
+-   *Adult Mortality* - Slightly Right Skewed
+
+-   *HIV Aids* - Very Right Skewed, many zeros
+
+-   *Income* - Slightly Left Skewed, many Zeros
+
+-   *Schooling* - Normal
+
+**Scatterplots**
+
 ```{r}
 for (i in 2:length(colnames(dataNumeric))){
   plot(dataNumeric[,i], dataNumeric[,1], 
@@ -102,7 +159,16 @@ for (i in 2:length(colnames(dataNumeric))){
 }
 ```
 
-Residual Plots
+Trying to figure out cause of Adult Mortality Grouping
+
+```{r}
+data%>%
+  ggplot(aes(Adult.Mortality, Life.expectancy, color=Status))+
+  geom_point()
+```
+
+**Residual Plots**
+
 ```{r}
 for (i in 2:length(colnames(dataNumeric))){
   model <- lm(dataNumeric[,1] ~ dataNumeric[,i])
@@ -115,3 +181,62 @@ for (i in 2:length(colnames(dataNumeric))){
 }
 ```
 
+**Life Expectancy grouped by Status**
+
+```{r}
+data%>%
+  ggplot(aes(Status, Life.expectancy))+
+  geom_boxplot()
+
+data%>%
+  mutate(Year=as.factor(Year))%>%
+  ggplot(aes(Year, Life.expectancy))+
+  geom_boxplot()+
+  facet_wrap(vars(Status))+
+  scale_x_discrete(guide = guide_axis(angle = 45))
+```
+
+**Adult Mortality grouped by Status**
+
+```{r}
+data%>%
+  ggplot(aes(Status, Adult.Mortality))+
+  geom_boxplot()
+
+data%>%
+  mutate(Year=as.factor(Year))%>%
+  ggplot(aes(Year, Adult.Mortality))+
+  geom_boxplot()+
+  facet_wrap(vars(Status))+
+  scale_x_discrete(guide = guide_axis(angle = 45))
+```
+
+**HIV/AIDS grouped by Status**
+
+```{r}
+data%>%
+  ggplot(aes(Status, HIV.AIDS))+
+  geom_boxplot()
+
+data%>%
+  mutate(Year=as.factor(Year))%>%
+  ggplot(aes(Year, HIV.AIDS))+
+  geom_boxplot()+
+  facet_wrap(vars(Status))+
+  scale_x_discrete(guide = guide_axis(angle = 45))
+```
+
+**Schooling grouped by Status**
+
+```{r}
+data%>%
+  ggplot(aes(Status, Schooling))+
+  geom_boxplot()
+
+data%>%
+  mutate(Year=as.factor(Year))%>%
+  ggplot(aes(Year, Schooling))+
+  geom_boxplot()+
+  facet_wrap(vars(Status))+
+  scale_x_discrete(guide = guide_axis(angle = 45))
+```
